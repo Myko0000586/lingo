@@ -1,8 +1,10 @@
 // Service worker — кэширует приложение для работы офлайн
-const CACHE = 'lingo-v1';
+const CACHE = 'lingo-v2';
 const ASSETS = [
   './',
   './index.html',
+  './data.js',
+  './app.js',
   './manifest.json',
   './icon-192.png',
   './icon-512.png',
