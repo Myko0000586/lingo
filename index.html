@@ -167,6 +167,25 @@
   .sec-btn.ghost{color:var(--blue); border-color:#bfe6fb;}
   .sec-btn.danger{color:var(--red); border-color:#ffc9c9;}
 
+  /* chat */
+  .chat-topics{display:flex; flex-wrap:wrap; gap:10px; margin-top:10px;}
+  .chat-start-hint{margin:18px 0 6px;}
+  .chat-wrap{display:flex; flex-direction:column; height:calc(100vh - 200px); min-height:360px;}
+  .chat-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;}
+  .chat-msgs{flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:10px; padding:6px 2px;}
+  .bubble{max-width:82%; padding:11px 14px; border-radius:16px; font-size:16px; line-height:1.4; position:relative;}
+  .bubble.teacher{align-self:flex-start; background:#eef6ff; border:2px solid #cfe8ff; border-bottom-left-radius:5px;}
+  .bubble.me{align-self:flex-end; background:var(--green); color:#fff; border-bottom-right-radius:5px;}
+  .bubble .play{background:var(--blue); color:#fff; border-radius:7px; padding:1px 8px; font-size:13px; margin-left:6px;}
+  .bubble .tip{margin-top:8px; padding-top:8px; border-top:1px dashed #b9d9f3; font-size:13px; color:#a6810a;}
+  .bubble.typing{color:var(--gray-d); font-style:italic;}
+  .chat-input{display:flex; gap:8px; align-items:flex-end; padding-top:10px; border-top:2px solid var(--gray);}
+  .chat-input textarea{flex:1; min-height:46px; max-height:120px; border:2px solid var(--gray); border-radius:14px; padding:11px 12px; font-size:16px; font-family:inherit; resize:none;}
+  .icon-btn{width:48px; height:48px; border-radius:14px; font-size:22px; flex-shrink:0; color:#fff; display:flex; align-items:center; justify-content:center;}
+  .icon-btn.mic{background:var(--purple);} .icon-btn.mic.rec{background:var(--red); animation:pulse 1s infinite;}
+  .icon-btn.send{background:var(--green);}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+
   .toast{position:fixed; bottom:90px; left:50%; transform:translateX(-50%); background:#333; color:#fff; padding:12px 20px; border-radius:12px; font-weight:700; z-index:99; opacity:0; transition:.3s; max-width:90%; text-align:center;}
   .toast.show{opacity:1;}
   .shake{animation:shake .4s;} @keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}
@@ -179,7 +198,7 @@
   <div class="stat flame">🔥 <span id="hud-streak">0</span></div>
   <div class="stat gem">💎 <span id="hud-gems">0</span></div>
   <div class="spacer"></div>
-  <div class="stat heart">❤️ <span id="hud-hearts">5</span></div>
+  <div class="stat" style="color:var(--green)">⭐ <span id="hud-xp">0</span></div>
 </div>
 
 <!-- SCREENS -->
@@ -189,6 +208,7 @@
     <div id="cardsStats"></div>
     <div id="cardsArea"></div>
   </div>
+  <div id="screen-chat" class="hidden"></div>
   <div id="screen-write" class="hidden"></div>
   <div id="screen-profile" class="hidden"></div>
 </div>
@@ -197,6 +217,7 @@
 <div class="tabbar" id="tabbar">
   <button id="tab-learn" class="active" onclick="go('learn')"><span class="ic">🏠</span>Учёба</button>
   <button id="tab-cards" onclick="go('cards')"><span class="ic">🗂️</span>Карточки</button>
+  <button id="tab-chat" onclick="go('chat')"><span class="ic">💬</span>Диалог</button>
   <button id="tab-write" onclick="go('write')"><span class="ic">✍️</span>Письмо</button>
   <button id="tab-profile" onclick="go('profile')"><span class="ic">⚙️</span>Профиль</button>
 </div>
@@ -206,7 +227,6 @@
   <div class="lesson-top">
     <button class="close-btn" onclick="quitLesson()">✕</button>
     <div class="progressbar"><div id="lessonProgress"></div></div>
-    <div class="hearts-mini">❤️ <span id="lessonHearts">5</span></div>
   </div>
   <div class="lesson-body" id="lessonBody"></div>
   <div id="lessonFootArea"></div>
@@ -231,15 +251,6 @@
       <div class="reward green"><div class="l">Слов</div><div class="v" id="endWords">0</div></div>
     </div>
     <button class="check-btn" style="max-width:300px" onclick="backFromLesson()">Продолжить</button>
-  </div>
-</div>
-
-<!-- GAME OVER -->
-<div id="overScreen" class="hidden">
-  <div class="center-screen-inner">
-    <div class="big-emoji">💔</div><h1>Закончились жизни</h1>
-    <p class="muted" style="max-width:300px">Жизни восстанавливаются со временем (1 каждые 30 минут).</p>
-    <button class="check-btn" style="max-width:300px" onclick="backFromLesson()">На главную</button>
   </div>
 </div>
 

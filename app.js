@@ -3,7 +3,6 @@
    ============================================================ */
 
 /* ---------- Состояние и сохранение ---------- */
-const MAX_HEARTS = 5;
 const SRS_INTERVALS = [0, 1, 2, 4, 8, 16]; // дни до повторения по «коробкам»
 const LEARNED_BOX = 5;                       // достиг этой коробки → «выучено»
 
@@ -13,7 +12,6 @@ const DEFAULT_STATE = {
   dailyGoal: 30,            // XP в день
   reminderTime: '19:00',
   notify: false,
-  hearts: MAX_HEARTS, lastHeartTs: 0,
   gems: 0, xp: 0, streak: 0, lastDay: null,
   todayXp: 0, todayDate: null,
   progress: {},             // lessonKey -> true
@@ -45,18 +43,6 @@ function speak(text){
   try{ speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(text); u.lang='en-US'; u.rate=0.9; speechSynthesis.speak(u);}catch(e){}
 }
 function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('show'),2200); }
-
-/* ---------- Жизни (восстановление со временем) ---------- */
-function regenHearts(){
-  if(S.hearts >= MAX_HEARTS) return;
-  const REGEN_MS = 30*60*1000; // 1 жизнь / 30 мин
-  if(!S.lastHeartTs) S.lastHeartTs = Date.now();
-  const gained = Math.floor((Date.now() - S.lastHeartTs) / REGEN_MS);
-  if(gained > 0){
-    S.hearts = Math.min(MAX_HEARTS, S.hearts + gained);
-    S.lastHeartTs = S.hearts >= MAX_HEARTS ? 0 : S.lastHeartTs + gained*REGEN_MS;
-  }
-}
 
 /* ---------- День / streak / дневная цель ---------- */
 function rollDay(){
@@ -119,7 +105,7 @@ function gradeCard(id, ok){
 /* ============================================================
    НАВИГАЦИЯ ПО ВКЛАДКАМ
    ============================================================ */
-const SCREENS = ['learn','cards','write','profile'];
+const SCREENS = ['learn','cards','chat','write','profile'];
 function go(screen){
   SCREENS.forEach(s=>{
     $('#screen-'+s).classList.toggle('hidden', s!==screen);
@@ -128,15 +114,15 @@ function go(screen){
   window.scrollTo(0,0);
   if(screen==='learn') renderPath();
   if(screen==='cards') renderCards();
+  if(screen==='chat') renderChat();
   if(screen==='write') renderWrite();
   if(screen==='profile') renderProfile();
   refreshHud();
 }
 function refreshHud(){
-  regenHearts();
   $('#hud-streak').textContent = S.streak;
   $('#hud-gems').textContent = S.gems;
-  $('#hud-hearts').textContent = S.hearts;
+  $('#hud-xp').textContent = S.xp;
   save();
 }
 
@@ -200,10 +186,8 @@ let L = null;
 function unitByTi(ti){ return ti<1000 ? THEMES[ti] : GRAMMAR[ti-1000]; }
 
 function startLesson(ti, li){
-  regenHearts();
-  if(S.hearts<=0){ showOver(); return; }
   const unit = unitByTi(ti);
-  L = {ti, li, unit, items:unit.lessons[li].items, words:unit.lessons[li].words||[], idx:0, correct:0, scored:0, hearts:S.hearts, answered:false};
+  L = {ti, li, unit, items:unit.lessons[li].items, words:unit.lessons[li].words||[], idx:0, correct:0, scored:0, answered:false};
   $('#screen-learn').classList.add('hidden');
   $('#tabbar').classList.add('hidden');
   $('#lesson').classList.remove('hidden');
@@ -213,14 +197,12 @@ function quitLesson(){ if(confirm('Выйти из урока? Прогресс 
 function backFromLesson(){
   $('#lesson').classList.add('hidden');
   $('#endScreen').classList.add('hidden');
-  $('#overScreen').classList.add('hidden');
   $('#tabbar').classList.remove('hidden');
   go('learn');
 }
 
 function renderItem(){
   L.answered=false; L.selection=null;
-  $('#lessonHearts').textContent = L.hearts;
   $('#lessonProgress').style.width = (L.idx/L.items.length*100)+'%';
   setFootCheck();
   const it = L.items[L.idx];
@@ -279,7 +261,7 @@ function matchClick(b){
     L.matchSel.classList.add('done'); b.classList.add('done'); L.matchSel=null; L.matchDone++;
     if(L.matchDone===it.pairs.length){ L.correct++; L.scored++; setTimeout(nextItem,300); }
   } else {
-    const a=L.matchSel; a.classList.add('wrong'); b.classList.add('wrong'); L.matchSel=null; loseHeart();
+    const a=L.matchSel; a.classList.add('wrong'); b.classList.add('wrong'); L.matchSel=null;
     setTimeout(()=>{ a.classList.remove('wrong','sel'); b.classList.remove('wrong'); },480);
   }
 }
@@ -299,7 +281,7 @@ function checkAnswer(){
   if(it.type==='choice'||it.type==='listen') ok = norm(L.selection)===norm(it.a);
   else if(it.type==='build') ok = norm(L.built.map(b=>b.w).join(' '))===norm(it.a);
   L.answered=true; L.scored++;
-  if(ok){ L.correct++; } else { loseHeart(); }
+  if(ok){ L.correct++; }
   showFeedback(ok, it);
 }
 function showFeedback(ok, it){
@@ -314,12 +296,11 @@ function showFeedback(ok, it){
   const fb=document.createElement('div'); fb.className='feedback '+(ok?'ok':'no');
   fb.innerHTML = ok ? `<h3>✅ Отлично!</h3><p>${esc(it.a)}</p>` : `<h3>❌ Правильный ответ:</h3><p>${esc(it.a)}</p>`;
   const cont=document.createElement('button'); cont.className='check-btn continue-btn '+(ok?'':'no'); cont.textContent='Продолжить';
-  cont.onclick=()=>{ if(L.hearts<=0){ S.hearts=0; S.lastHeartTs=Date.now(); save(); showOver(); return;} nextItem(); };
+  cont.onclick=()=>nextItem();
   fb.appendChild(cont);
   $('#lessonFootArea').innerHTML=''; $('#lessonFootArea').appendChild(fb);
   if(ok) speak(it.a);
 }
-function loseHeart(){ L.hearts=Math.max(0,L.hearts-1); $('#lessonHearts').textContent=L.hearts; }
 function nextItem(){ L.idx++; if(L.idx>=L.items.length){ finishLesson(); return; } renderItem(); }
 
 function finishLesson(){
@@ -328,7 +309,6 @@ function finishLesson(){
   const xp = 10 + L.correct*2;
   S.progress[lessonKey(L.ti,L.li)] = true;
   S.gems += 5;
-  S.hearts = L.hearts; if(L.hearts<MAX_HEARTS && !S.lastHeartTs) S.lastHeartTs=Date.now();
   addXp(xp);
   if(L.words && L.words.length) addWordsToDeck(L.words);
   save();
@@ -338,7 +318,6 @@ function finishLesson(){
   $('#lesson').classList.add('hidden');
   $('#endScreen').classList.remove('hidden');
 }
-function showOver(){ $('#lesson').classList.add('hidden'); $('#overScreen').classList.remove('hidden'); }
 
 /* ============================================================
    ЭКРАН «КАРТОЧКИ»
@@ -488,6 +467,115 @@ function renderWritingFeedback(d, original){
 }
 
 /* ============================================================
+   ЭКРАН «ДИАЛОГ» — голосовое общение с ИИ-учителем
+   ============================================================ */
+let C = null; // {topic, view:[{role,content,tip}], api:[{role,content}], busy}
+
+function renderChat(){
+  const scr = $('#screen-chat');
+  if(!S.apiUrl){
+    scr.innerHTML = `<div class="feedback no" style="border-radius:14px">
+      <h3>🔌 ИИ-учитель ещё не подключён</h3>
+      <p>Голосовой диалог работает через ИИ-сервер. Открой Профиль → «ИИ-учитель» и настрой его (инструкция в файле ИНСТРУКЦИЯ.md).</p></div>`;
+    return;
+  }
+  if(!C){ // выбор темы
+    const chips = Object.keys(TOPICS).map(k=>`<button class="chip" onclick="startChat('${k}')">${TOPICS[k].emoji} ${TOPICS[k].title}</button>`).join('')
+      + `<button class="chip" onclick="startChat('free')">💬 Свободная тема</button>`;
+    scr.innerHTML = `<h3 class="sec">Диалог с учителем</h3>
+      <p class="muted">Выбери тему — учитель начнёт беседу на английском (уровень ${S.level}), будет задавать вопросы и мягко поправлять. Можно отвечать голосом 🎤 или текстом.</p>
+      <div class="chat-topics">${chips}</div>`;
+    return;
+  }
+  // активный диалог
+  const tp = C.topic==='free' ? {emoji:'💬', title:'Свободная тема'} : TOPICS[C.topic];
+  let msgs='';
+  C.view.forEach((m,i)=>{
+    if(m.role==='teacher'){
+      msgs += `<div class="bubble teacher">${esc(m.content)} <button class="play" onclick="speak(${JSON.stringify(m.content)})">🔊</button>`
+        + (m.tip?`<div class="tip">📝 ${esc(m.tip)}</div>`:'') + `</div>`;
+    } else if(m.role==='typing'){
+      msgs += `<div class="bubble teacher typing">учитель печатает…</div>`;
+    } else {
+      msgs += `<div class="bubble me">${esc(m.content)}</div>`;
+    }
+  });
+  const micBtn = ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)
+    ? `<button class="icon-btn mic" id="micBtn" onclick="toggleMic()">🎤</button>` : '';
+  scr.innerHTML = `<div class="chat-wrap">
+    <div class="chat-head"><span class="badge" style="background:${C.topic==='free'?'#777':TOPICS[C.topic].color}">${tp.emoji} ${tp.title}</span>
+      <button class="link-btn" onclick="endChat()">✕ завершить</button></div>
+    <div class="chat-msgs" id="chatMsgs">${msgs}</div>
+    <div class="chat-input">
+      <textarea id="chatText" placeholder="Ответь учителю..." rows="1" oninput="autoGrow(this)"></textarea>
+      ${micBtn}
+      <button class="icon-btn send" onclick="sendChat()">➤</button>
+    </div></div>`;
+  const box=$('#chatMsgs'); if(box) box.scrollTop = box.scrollHeight;
+}
+function autoGrow(el){ el.style.height='auto'; el.style.height=Math.min(120, el.scrollHeight)+'px'; }
+
+function startChat(topic){
+  C = {topic, view:[], api:[], busy:false};
+  const topicName = topic==='free' ? 'любую бытовую тему' : ('тему «'+TOPICS[topic].title+'»');
+  C.api.push({role:'user', content:`[Начни урок-диалог на английском про ${topicName}. Поприветствуй ученика и задай первый простой вопрос.]`});
+  go('chat'); // перерисует с активным C (но пока пусто)
+  pushTyping(); chatRequest();
+}
+function endChat(){ C=null; renderChat(); }
+
+function pushTyping(){ C.view.push({role:'typing'}); renderChat(); }
+function popTyping(){ C.view = C.view.filter(m=>m.role!=='typing'); }
+
+async function chatRequest(){
+  C.busy=true;
+  try{
+    const r = await fetch(S.apiUrl, {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({mode:'chat', messages:C.api, level:S.level, topic:C.topic})});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const d = await r.json();
+    popTyping();
+    const reply = d.reply || d.summary || '...';
+    C.api.push({role:'assistant', content:reply});
+    C.view.push({role:'teacher', content:reply, tip:d.correction||''});
+    addXp(3); save();
+    renderChat();
+    speak(reply);
+  }catch(e){
+    popTyping();
+    C.view.push({role:'teacher', content:'(Не удалось связаться с учителем: '+e.message+')'});
+    renderChat();
+  }finally{ C.busy=false; }
+}
+
+function sendChat(){
+  if(!C || C.busy) return;
+  const ta=$('#chatText'); const text=(ta?ta.value:'').trim();
+  if(!text) return;
+  stopMic();
+  C.api.push({role:'user', content:text});
+  C.view.push({role:'me', content:text});
+  pushTyping(); chatRequest();
+}
+
+/* ---- голосовой ввод (Web Speech API) ---- */
+let recog=null, recOn=false;
+function toggleMic(){ recOn ? stopMic() : startMic(); }
+function startMic(){
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SR){ toast('Голосовой ввод не поддерживается — нажми 🎤 на клавиатуре iPhone'); return; }
+  try{
+    recog = new SR(); recog.lang='en-US'; recog.interimResults=true; recog.continuous=false;
+    recog.onresult = e=>{ let t=''; for(let i=0;i<e.results.length;i++) t+=e.results[i][0].transcript; const ta=$('#chatText'); if(ta){ ta.value=t; autoGrow(ta); } };
+    recog.onend = ()=>{ recOn=false; const b=$('#micBtn'); if(b) b.classList.remove('rec'); };
+    recog.onerror = ()=>{ recOn=false; const b=$('#micBtn'); if(b) b.classList.remove('rec'); };
+    recog.start(); recOn=true; const b=$('#micBtn'); if(b) b.classList.add('rec');
+    toast('🎤 Говори по-английски...');
+  }catch(e){ toast('Не удалось включить микрофон'); }
+}
+function stopMic(){ if(recog && recOn){ try{ recog.stop(); }catch(e){} } recOn=false; const b=$('#micBtn'); if(b) b.classList.remove('rec'); }
+
+/* ============================================================
    ЭКРАН «ПРОФИЛЬ / НАСТРОЙКИ»
    ============================================================ */
 function renderProfile(){
@@ -590,8 +678,7 @@ function scheduleReminder(){
    СТАРТ
    ============================================================ */
 function init(){
-  rollDay(); regenHearts();
-  // если новый день и цель не достигнута — streak не сбрасываем сразу, но проверим разрыв
+  rollDay();
   go('learn');
   scheduleReminder();
   if('serviceWorker' in navigator){ window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{})); }

@@ -22,13 +22,19 @@ export default {
     let body;
     try { body = await request.json(); } catch { return json({ error: 'Bad JSON' }, 400); }
 
-    const text = (body.text || '').toString().slice(0, 2000);
-    const task = (body.task || '').toString().slice(0, 500);
-    const level = (body.level || 'A2').toString();
-    if (!text) return json({ error: 'No text' }, 400);
-
     if (!env.ANTHROPIC_API_KEY) return json({ error: 'Server is missing ANTHROPIC_API_KEY' }, 500);
     const model = env.MODEL || 'claude-3-5-haiku-20241022';
+    const level = (body.level || 'A2').toString();
+
+    // ===== Режим ДИАЛОГА =====
+    if (body.mode === 'chat') {
+      return await handleChat(body, env, model, level);
+    }
+
+    // ===== Режим ПРОВЕРКИ ПИСЬМА =====
+    const text = (body.text || '').toString().slice(0, 2000);
+    const task = (body.task || '').toString().slice(0, 500);
+    if (!text) return json({ error: 'No text' }, 400);
 
     const system =
       `Ты — доброжелательный, но требовательный преподаватель английского языка. ` +
@@ -105,6 +111,63 @@ export default {
     return json(toolUse.input, 200);
   },
 };
+
+/* ===== Диалог-урок с учителем ===== */
+async function handleChat(body, env, model, level) {
+  const messages = Array.isArray(body.messages) ? body.messages.slice(-20) : [];
+  if (!messages.length) return json({ error: 'No messages' }, 400);
+
+  const system =
+    `Ты — дружелюбный преподаватель английского, ведёшь живой разговорный урок с учеником. ` +
+    `Ученик — носитель русского языка, уровень ${level} (CEFR). ` +
+    `ПРАВИЛА: говори простым английским языком уровня ${level}, короткими репликами (1–3 предложения). ` +
+    `Поддерживай беседу, задавай встречные вопросы, будь тёплым и терпеливым. ` +
+    `Если ученик сделал ошибку — НЕ прерывай беседу: в поле reply отвечай по-английски и продолжай диалог, ` +
+    `а в поле correction дай короткую подсказку НА РУССКОМ (что поправить и как правильно). Если ошибок нет — оставь correction пустым.`;
+
+  const tool = {
+    name: 'chat_reply',
+    description: 'Ответ учителя в диалоге',
+    input_schema: {
+      type: 'object',
+      properties: {
+        reply: { type: 'string', description: 'Реплика учителя на английском (продолжение беседы)' },
+        correction: { type: 'string', description: 'Краткая подсказка на русском об ошибке ученика, или пустая строка' },
+      },
+      required: ['reply', 'correction'],
+    },
+  };
+
+  let resp;
+  try {
+    resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 500,
+        system,
+        tools: [tool],
+        tool_choice: { type: 'tool', name: 'chat_reply' },
+        messages,
+      }),
+    });
+  } catch (e) {
+    return json({ error: 'Upstream fetch failed: ' + e.message }, 502);
+  }
+  if (!resp.ok) {
+    const t = await resp.text();
+    return json({ error: 'Anthropic error ' + resp.status, detail: t.slice(0, 300) }, 502);
+  }
+  const data = await resp.json();
+  const toolUse = (data.content || []).find((c) => c.type === 'tool_use');
+  if (!toolUse) return json({ error: 'No structured output' }, 502);
+  return json(toolUse.input, 200);
+}
 
 function json(obj, status = 200) {
   return new Response(JSON.stringify(obj), {
