@@ -1,5 +1,7 @@
-// Service worker — кэширует приложение для работы офлайн
-const CACHE = 'lingo-v3';
+// Service worker — стратегия «сначала сеть» (network-first).
+// Свежий код всегда подгружается при наличии интернета; кэш используется как
+// запасной вариант офлайн. Это исключает «застревание» старых файлов.
+const CACHE = 'lingo-v4';
 const ASSETS = [
   './',
   './index.html',
@@ -17,19 +19,26 @@ self.addEventListener('install', e => {
 
 self.addEventListener('activate', e => {
   e.waitUntil(
-    caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+    caches.keys()
+      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
 
-// cache-first: сначала из кэша, иначе из сети
 self.addEventListener('fetch', e => {
-  if (e.request.method !== 'GET') return;
+  const req = e.request;
+  if (req.method !== 'GET') return;
+  // только свой источник; внешние запросы (ИИ-сервер) не трогаем
+  if (new URL(req.url).origin !== self.location.origin) return;
+
   e.respondWith(
-    caches.match(e.request).then(hit => hit || fetch(e.request).then(resp => {
-      const copy = resp.clone();
-      caches.open(CACHE).then(c => c.put(e.request, copy)).catch(() => {});
-      return resp;
-    }).catch(() => caches.match('./index.html')))
+    fetch(req)
+      .then(resp => {
+        // обновляем кэш свежей копией
+        const copy = resp.clone();
+        caches.open(CACHE).then(c => c.put(req, copy)).catch(() => {});
+        return resp;
+      })
+      .catch(() => caches.match(req).then(hit => hit || caches.match('./index.html')))
   );
 });
