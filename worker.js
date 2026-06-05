@@ -4,7 +4,7 @@
 
    Что нужно задать в настройках Worker (Settings → Variables):
      ANTHROPIC_API_KEY  — твой ключ с console.anthropic.com  (тип: Secret)
-     MODEL              — (необязательно) модель, по умолчанию claude-3-5-haiku-20241022
+     MODEL              — (необязательно) модель, по умолчанию claude-haiku-4-5
    ============================================================ */
 
 const CORS = {
@@ -23,7 +23,7 @@ export default {
     try { body = await request.json(); } catch { return json({ error: 'Bad JSON' }, 400); }
 
     if (!env.ANTHROPIC_API_KEY) return json({ error: 'Server is missing ANTHROPIC_API_KEY' }, 500);
-    const model = env.MODEL || 'claude-3-5-haiku-20241022';
+    const model = env.MODEL || 'claude-haiku-4-5';
     const level = (body.level || 'A2').toString();
 
     // ===== Режим ДИАЛОГА =====
