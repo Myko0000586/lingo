@@ -13,11 +13,22 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
+// Кто может обращаться к серверу (защита от чужого использования твоих средств)
+function originAllowed(request) {
+  const o = request.headers.get('Origin') || '';
+  return (
+    o.includes('myko0000586.github.io') ||
+    o.includes('localhost') ||
+    o.includes('127.0.0.1')
+  );
+}
+
 export default {
   async fetch(request, env) {
     // preflight
     if (request.method === 'OPTIONS') return new Response(null, { headers: CORS });
     if (request.method !== 'POST') return json({ error: 'Use POST' }, 405);
+    if (!originAllowed(request)) return json({ error: 'Forbidden origin' }, 403);
 
     let body;
     try { body = await request.json(); } catch { return json({ error: 'Bad JSON' }, 400); }

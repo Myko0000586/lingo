@@ -17,7 +17,7 @@ const DEFAULT_STATE = {
   progress: {},             // lessonKey -> true
   vocab: {},                // wordId -> {box, due(день), reps, status, added}
   writing: [],              // история проверок письма
-  apiUrl: '',               // адрес ИИ-сервера
+  apiUrl: 'https://lingo-teacher.myko-apps.workers.dev', // адрес ИИ-сервера (по умолчанию)
 };
 
 let S = loadState();
