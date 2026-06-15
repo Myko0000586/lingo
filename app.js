@@ -8,7 +8,7 @@ const LEARNED_BOX = 5;                       // достиг этой короб
 
 const DEFAULT_STATE = {
   level: 'A2',
-  activeTopics: ['home','hockey','school','food','travel','grammar'],
+  activeTopics: Object.keys(TOPICS),
   dailyGoal: 30,            // XP в день
   reminderTime: '19:00',
   notify: false,
@@ -36,7 +36,7 @@ const $ = sel => document.querySelector(sel);
 const today = () => Math.floor(Date.now() / 86400000); // номер дня
 const todayStr = () => new Date().toDateString();
 function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
-function norm(s){ return (s||'').toLowerCase().replace(/[^a-z0-9 ]/g,'').replace(/\s+/g,' ').trim(); }
+function norm(s){ return (s||'').toLowerCase().replace(/[^\p{L}\p{N} ]/gu,'').replace(/\s+/g,' ').trim(); }
 function esc(s){ return (s||'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
 function speak(text){
@@ -129,11 +129,17 @@ function refreshHud(){
 /* ============================================================
    ЭКРАН «УЧЁБА» — путь из юнитов
    ============================================================ */
+const LEVEL_ORDER = ['A2','B1','B2'];
 function allUnits(){
-  // объединяем темы и грамматику, фильтруем по активным темам
+  // порядок: A2 → B1 → B2; внутри уровня сначала темы, затем грамматика
   const units = [];
-  THEMES.forEach(t => { if(S.activeTopics.includes(t.topic)) units.push(t); });
-  GRAMMAR.forEach(g => { if(S.activeTopics.includes('grammar')) units.push(g); });
+  LEVEL_ORDER.forEach(lv => {
+    THEMES.forEach(t => { if(t.level===lv && S.activeTopics.includes(t.topic)) units.push(t); });
+    GRAMMAR.forEach(g => { if(g.level===lv && S.activeTopics.includes('grammar')) units.push(g); });
+  });
+  // юниты без указанного уровня — в конец
+  THEMES.forEach(t => { if(!t.level && S.activeTopics.includes(t.topic)) units.push(t); });
+  GRAMMAR.forEach(g => { if(!g.level && S.activeTopics.includes('grammar')) units.push(g); });
   return units;
 }
 function lessonKey(ti, li){ return ti+'#'+li; }
@@ -155,7 +161,14 @@ function renderPath(){
   const wrap = $('#path'); wrap.innerHTML = '';
   if(!units.length){ wrap.innerHTML = '<p style="text-align:center;color:#999;margin-top:40px">Выбери темы в Профиле ⚙️</p>'; return; }
 
+  let curLevel = null;
   units.forEach((unit, ui)=>{
+    if(unit.level && unit.level!==curLevel){
+      curLevel = unit.level;
+      const lh = document.createElement('div'); lh.className='level-head';
+      lh.innerHTML = `<span>Уровень ${curLevel}</span>`;
+      wrap.appendChild(lh);
+    }
     const tp = TOPICS[unit.topic];
     const head = document.createElement('div');
     head.className='unit-head'; head.style.background = tp.color; head.style.boxShadow='0 4px 0 rgba(0,0,0,.18)';
@@ -400,7 +413,8 @@ function quitReview(){ $('#review').classList.add('hidden'); $('#tabbar').classL
    ============================================================ */
 let curPrompt=null;
 function renderWrite(){
-  const prompts=WRITING_PROMPTS.filter(p=>S.activeTopics.includes(p.topic) && (p.level===S.level||S.level==='B1'));
+  const rank={A2:1,B1:2,B2:3};
+  const prompts=WRITING_PROMPTS.filter(p=>S.activeTopics.includes(p.topic) && (rank[p.level]||1)<=(rank[S.level]||1));
   const list=prompts.length?prompts:WRITING_PROMPTS;
   if(!curPrompt || !list.includes(curPrompt)) curPrompt=list[Math.floor(Math.random()*list.length)];
   const tp=TOPICS[curPrompt.topic];
@@ -591,10 +605,11 @@ function renderProfile(){
       <div class="stat-box green"><div class="v">${st.learned}</div><div class="l">слов выучено</div></div>
     </div>
 
-    <h3 class="sec">Уровень</h3>
+    <h3 class="sec">Уровень (для письма и диалога)</h3>
     <div class="seg">
       <button class="${S.level==='A2'?'on':''}" onclick="setLevel('A2')">A2</button>
       <button class="${S.level==='B1'?'on':''}" onclick="setLevel('B1')">B1</button>
+      <button class="${S.level==='B2'?'on':''}" onclick="setLevel('B2')">B2</button>
     </div>
 
     <h3 class="sec">Темы для занятий</h3>
